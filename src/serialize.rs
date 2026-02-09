@@ -41,7 +41,7 @@ fn gather_term_info(text: &str) -> TermInfo {
     }
 }
 
-fn serialise_term<'a>(text: &'a str) -> Cow<'a, str> {
+pub fn serialise_term<'a>(text: &'a str) -> Cow<'a, str> {
     if text.is_empty() {
         return "\"\"".into();
     }
