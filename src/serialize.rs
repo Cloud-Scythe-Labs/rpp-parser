@@ -17,7 +17,7 @@ fn gather_term_info(text: &str) -> TermInfo {
     // - it contains a space
 
     // if it starts with any quote char, then it will always be quoted
-    let mut must_quote = text.starts_with(&QUOTE_CHARS);
+    let mut must_quote = text.starts_with(QUOTE_CHARS);
     let mut has_double_quote = false;
     let mut has_single_quote = false;
     let mut has_backtick_quote = false;
@@ -43,7 +43,7 @@ fn gather_term_info(text: &str) -> TermInfo {
 }
 
 // Faster than old implementation on release builds, slower on debug builds
-pub fn serialise_term<'a>(text: &'a str) -> Cow<'a, str> {
+pub fn serialise_term(text: &str) -> Cow<'_, str> {
     if text.is_empty() {
         return "\"\"".into();
     }
@@ -94,7 +94,7 @@ struct IndentFormatter<'a, F: Write> {
 }
 
 impl<'a, F: Write> IndentFormatter<'a, F> {
-    fn new(fmt: &'a mut F) -> Self {
+    const fn new(fmt: &'a mut F) -> Self {
         Self {
             fmt,
             on_newline: false,
@@ -102,7 +102,7 @@ impl<'a, F: Write> IndentFormatter<'a, F> {
     }
 }
 
-impl<'a, F: Write> Write for IndentFormatter<'a, F> {
+impl<F: Write> Write for IndentFormatter<'_, F> {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
         for s in s.split_inclusive('\n') {
             if self.on_newline {
@@ -125,9 +125,9 @@ impl<'a, F: Write> Write for IndentFormatter<'a, F> {
     }
 }
 
-impl<'a> Debug for Element<'a> {
+impl Debug for Element<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.tag.contains(" ") {
+        if self.tag.contains(' ') {
             write!(f, "<{:?}", self.tag)?;
         } else {
             write!(f, "<{}", self.tag)?;
@@ -151,7 +151,7 @@ impl<'a> Debug for Element<'a> {
     }
 }
 
-impl<'a> Debug for Child<'a> {
+impl Debug for Child<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Child::Line(items) => {
@@ -187,7 +187,7 @@ pub fn serialize_to_string(element: &Element) -> String {
 fn process(buf: &mut String, element: &Element, indent_level: usize) {
     // first line
     for _ in 0..indent_level {
-        buf.push_str("  ")
+        buf.push_str("  ");
     }
     buf.push('<');
     buf.push_str(element.tag);
@@ -200,11 +200,11 @@ fn process(buf: &mut String, element: &Element, indent_level: usize) {
 
     buf.push('\n');
 
-    for child in element.children.iter() {
+    for child in &element.children {
         match child {
             Child::Line(child) => {
-                for _ in 0..(indent_level + 1) {
-                    buf.push_str("  ")
+                for _ in 0..=indent_level {
+                    buf.push_str("  ");
                 }
 
                 let mut is_first = true;
@@ -213,7 +213,7 @@ fn process(buf: &mut String, element: &Element, indent_level: usize) {
                     if is_first {
                         is_first = false;
                     } else {
-                        buf.push(' ')
+                        buf.push(' ');
                     }
                     buf.push_str(&x);
                 }
@@ -229,7 +229,7 @@ fn process(buf: &mut String, element: &Element, indent_level: usize) {
 
     // last line
     for _ in 0..indent_level {
-        buf.push_str("  ")
+        buf.push_str("  ");
     }
     buf.push('>');
 }

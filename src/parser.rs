@@ -49,7 +49,7 @@ fn string(i: Input) -> Result {
     alt((unquoted_string, quoted_string))(i)
 }
 
-fn string_list(i: Input) -> Result<Vec<&str>> {
+fn string_list(i: Input<'_>) -> Result<'_, Vec<&str>> {
     // get first element
     let (i, first_element) = string(i)?;
 
