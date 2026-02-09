@@ -1,5 +1,6 @@
 use crate::parser::{Child, Element};
-use std::{borrow::Cow, iter::once};
+use std::fmt::Debug;
+use std::{borrow::Cow, fmt::Write, iter::once};
 
 const QUOTE_CHARS: [char; 3] = ['"', '\'', '`'];
 
@@ -78,6 +79,100 @@ pub fn serialise_term<'a>(text: &'a str) -> Cow<'a, str> {
         quoted_text.into()
     } else {
         text.into()
+    }
+}
+
+/// Formatter that handles nested indenting.
+///
+/// Implementation derived from:
+/// src/core/fmt/builders.rs.html
+#[derive(Debug)]
+struct IndentFormatter<'a, F: Write> {
+    fmt: &'a mut F,
+    on_newline: bool,
+}
+
+impl<'a, F: Write> IndentFormatter<'a, F> {
+    fn new(fmt: &'a mut F) -> Self {
+        Self {
+            fmt,
+            on_newline: false,
+        }
+    }
+}
+
+impl<'a, F: Write> Write for IndentFormatter<'a, F> {
+    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        for s in s.split_inclusive('\n') {
+            if self.on_newline {
+                self.fmt.write_str("  ")?;
+            }
+
+            self.on_newline = s.ends_with('\n');
+            self.fmt.write_str(s)?;
+        }
+
+        Ok(())
+    }
+
+    fn write_char(&mut self, c: char) -> std::fmt::Result {
+        if self.on_newline {
+            self.fmt.write_str("  ")?;
+        }
+        self.on_newline = c == '\n';
+        self.fmt.write_char(c)
+    }
+}
+
+impl<'a> Debug for Element<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.tag.contains(" ") {
+            write!(f, "<{:?}", self.tag)?;
+        } else {
+            write!(f, "<{}", self.tag)?;
+        }
+
+        let mut indent_f = IndentFormatter::new(f);
+
+        for attr in &self.attr {
+            write!(indent_f, " ")?;
+            write!(indent_f, "{attr:?}")?;
+        }
+
+        for child in &self.children {
+            write!(indent_f, "\n")?;
+            write!(indent_f, "{child:?}")?;
+        }
+
+        write!(f, "\n>")?;
+
+        Ok(())
+    }
+}
+
+impl<'a> Debug for Child<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Child::Line(items) => {
+                let mut iter = items.iter();
+
+                // handle first item in list
+                let Some(x) = iter.next() else {
+                    return write!(f, "<empty list>");
+                };
+                write!(f, "{x:?}")?;
+
+                // handle remaining items
+                for x in iter {
+                    write!(f, " {x:?}")?;
+                }
+            }
+            Child::Element(element) => {
+                write!(f, "{element:?}")?;
+            }
+        }
+
+        Ok(())
     }
 }
 
