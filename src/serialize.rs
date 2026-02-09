@@ -42,6 +42,7 @@ fn gather_term_info(text: &str) -> TermInfo {
     }
 }
 
+// Faster than old implementation on release builds, slower on debug builds
 pub fn serialise_term<'a>(text: &'a str) -> Cow<'a, str> {
     if text.is_empty() {
         return "\"\"".into();
