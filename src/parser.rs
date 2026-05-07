@@ -7,12 +7,13 @@ use nom::{
     sequence::{delimited, preceded, terminated, tuple},
     Finish, Parser,
 };
+use serde::Serialize;
 
 type Input<'a> = &'a str;
 
 type Result<'a, O = Input<'a>> = nom::IResult<Input<'a>, O>;
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Element<'a> {
     /// The name of the element. E.g. `REAPER_PROJECT`, `TRACK`, `FXCHAIN`, `VST`, `CONTAINER`
     pub tag: &'a str,
@@ -22,7 +23,7 @@ pub struct Element<'a> {
     pub children: Vec<Child<'a>>,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum Child<'a> {
     /// An arbitrary line of text, split into a [String] list using RPP's string quoting rules.
     Line(Vec<&'a str>),

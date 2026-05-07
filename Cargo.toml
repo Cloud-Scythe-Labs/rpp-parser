@@ -1,15 +1,13 @@
 [package]
 name = "rpp-parser"
-version = "0.1.1"
-edition = "2021"
+version = "0.1.0"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 description = "Parser for Reaper's RPP project files"
-homepage = "https://github.com/jamesWalker55/rpp-parser"
-repository = "https://github.com/jamesWalker55/rpp-parser"
+homepage = "https://github.com/Cloud-Scythe-Labs/rpp-parser"
+repository = "https://github.com/Cloud-Scythe-Labs/rpp-parser"
 
 [dependencies]
-itertools = "0.13.0"
-nom = "7"
-nom_locate = "4.2.0"
-thiserror = "1.0"
+nom = "7.1.3"
+serde = { version = "1", features = ["derive"] }
