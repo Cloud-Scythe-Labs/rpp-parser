@@ -279,7 +279,10 @@ impl ser::SerializeStruct for &mut Writer<'_> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{parser::parse_element, ser::to_string};
+    use crate::{
+        parser::{Child, Token, parse_element},
+        ser::to_string,
+    };
 
     /// A project as REAPER writes it: tokens quoted with each quote character, and without
     /// quotes where they don't need them, raw text, nested elements, and CRLF line endings.
@@ -312,5 +315,29 @@ mod tests {
         let project = parse_element(PROJECT).unwrap();
         let words: Vec<&str> = project.attr.iter().map(|token| token.text()).collect();
         assert_eq!(words, ["0.1", "7.79/linux-x86_64", "1794001593", "0"]);
+    }
+
+    #[test]
+    fn a_new_path_is_quoted_with_a_quote_it_does_not_have() {
+        let mut project = parse_element(PROJECT).unwrap();
+        let Child::Element(track) = &mut project.children[2] else {
+            panic!("the project's third child is its track");
+        };
+        assert_eq!(
+            track.line("NAME").map(|line| line[1].text()),
+            Some("Drums \"kit\"")
+        );
+        let name = Token::quoted("Kit \"two\"").unwrap();
+        assert_eq!(name.0, "'Kit \"two\"'");
+        let Child::Line(line) = &mut track.children[0] else {
+            panic!("the track's first child is its name");
+        };
+        line[1] = name;
+        assert!(
+            to_string(&project, "\r\n")
+                .unwrap()
+                .contains("    NAME 'Kit \"two\"'\r\n")
+        );
+        assert_eq!(Token::quoted("\"'`"), None);
     }
 }

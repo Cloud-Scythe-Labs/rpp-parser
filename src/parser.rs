@@ -53,6 +53,31 @@ impl Token<'_> {
             _ => raw,
         }
     }
+
+    /// `text` as a quoted token, as REAPER quotes a path or a name: in `"`, or if it has one, in
+    /// `'` or `` ` ``. `None` if it has all three.
+    pub fn quoted(text: &str) -> Option<Token<'static>> {
+        let quote = ['"', '\'', '`']
+            .into_iter()
+            .find(|quote| !text.contains(*quote))?;
+        Some(Token(Cow::Owned(format!("{quote}{text}{quote}"))))
+    }
+}
+
+impl<'a> Element<'a> {
+    /// The lines among its children.
+    pub fn lines(&self) -> impl Iterator<Item = &[Token<'a>]> {
+        self.children.iter().filter_map(|child| match child {
+            Child::Line(line) => Some(&line[..]),
+            _ => None,
+        })
+    }
+
+    /// Its first line whose first word is `key`.
+    pub fn line(&self, key: &str) -> Option<&[Token<'a>]> {
+        self.lines()
+            .find(|line| line.first().is_some_and(|first| first.text() == key))
+    }
 }
 
 fn quoted_string(i: Input) -> Result {
