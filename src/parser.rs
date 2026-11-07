@@ -1,11 +1,13 @@
+use std::borrow::Cow;
+
 use nom::{
+    Finish, Parser,
     branch::alt,
     bytes::complete::{take_till, take_till1},
     character::complete::{char, line_ending, multispace0, none_of, one_of, space0, space1},
-    combinator::all_consuming,
-    multi::{many0, many_till},
+    combinator::{all_consuming, recognize},
+    multi::{many_till, many0},
     sequence::{delimited, preceded, terminated, tuple},
-    Finish, Parser,
 };
 use serde::Serialize;
 
@@ -13,24 +15,44 @@ type Input<'a> = &'a str;
 
 type Result<'a, O = Input<'a>> = nom::IResult<Input<'a>, O>;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Element<'a> {
     /// The name of the element. E.g. `REAPER_PROJECT`, `TRACK`, `FXCHAIN`, `VST`, `CONTAINER`
     pub tag: &'a str,
     /// List of attributes for this element.
-    pub attr: Vec<&'a str>,
+    pub attr: Vec<Token<'a>>,
     /// Children of this element. See [Child].
     pub children: Vec<Child<'a>>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum Child<'a> {
-    /// An arbitrary line of text, split into a [String] list using RPP's string quoting rules.
-    Line(Vec<&'a str>),
+    /// An arbitrary line of text, split into [Token]s using RPP's string quoting rules.
+    Line(Vec<Token<'a>>),
     /// Raw unparsed text, e.g. used in TRACK > NAME or NOTES elements
     Text(&'a str),
     /// A subelement.
     Element(Element<'a>),
+}
+
+/// A word of a line or of an element's first line, as the file has it: with its quotes, if it's
+/// quoted (`"`, `'` or `` ` ``), so that it's written back as it was. See [`Token::text`] for
+/// the word itself.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename = "Token")]
+pub struct Token<'a>(pub Cow<'a, str>);
+
+impl Token<'_> {
+    /// The word, without its quotes.
+    pub fn text(&self) -> &str {
+        let raw: &str = &self.0;
+        match raw.chars().next() {
+            Some(quote @ ('"' | '\'' | '`')) if raw.len() > 1 && raw.ends_with(quote) => {
+                &raw[1..raw.len() - 1]
+            }
+            _ => raw,
+        }
+    }
 }
 
 fn quoted_string(i: Input) -> Result {
@@ -48,16 +70,19 @@ fn unquoted_string(i: Input) -> Result {
     take_till1(|x| x == ' ' || x == '\n' || x == '\r')(i)
 }
 
-fn string(i: Input) -> Result {
-    alt((unquoted_string, quoted_string))(i)
+/// A word as the file has it, quotes included.
+fn token(i: Input) -> Result<Token> {
+    alt((unquoted_string, recognize(quoted_string)))
+        .map(|raw| Token(Cow::Borrowed(raw)))
+        .parse(i)
 }
 
-fn string_list(i: Input<'_>) -> Result<'_, Vec<&str>> {
+fn token_list(i: Input<'_>) -> Result<'_, Vec<Token<'_>>> {
     // get first element
-    let (i, first_element) = string(i)?;
+    let (i, first_element) = token(i)?;
 
     // get the rest
-    let (i, mut other_elements) = many0(preceded(space1, string))(i)?;
+    let (i, mut other_elements) = many0(preceded(space1, token))(i)?;
 
     // prepend first element into list
     // TODO: inserting is inefficient, think of way to improve this
@@ -76,7 +101,7 @@ fn string_list(i: Input<'_>) -> Result<'_, Vec<&str>> {
 ///   |!@#H(ON  ' " "" ''
 /// >
 /// ```
-fn raw_text_child(i: Input) -> Result<&str> {
+fn raw_text_child(i: Input<'_>) -> Result<'_, &str> {
     preceded(char('|'), take_till(|x| x == '\n' || x == '\r'))(i)
 }
 
@@ -99,10 +124,7 @@ fn element(i: Input) -> Result<Element> {
 
     // rest of line is attr
     // (consumes newline)
-    let (i, attr) = terminated(
-        many0(preceded(space1, string)),
-        tuple((space0, line_ending)),
-    )(i)?;
+    let (i, attr) = terminated(many0(preceded(space1, token)), tuple((space0, line_ending)))(i)?;
 
     let (i, (children, _end)) = many_till(
         // keep taking child elements until end of element
@@ -111,7 +133,7 @@ fn element(i: Input) -> Result<Element> {
             alt((
                 raw_text_child.map(Child::Text),
                 element.map(Child::Element),
-                string_list.map(Child::Line),
+                token_list.map(Child::Line),
             )),
             tuple((space0, line_ending)),
         ),
